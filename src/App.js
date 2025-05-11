@@ -1,7 +1,7 @@
 // React tabanlı WMS mobil web uygulaması + proxy üzerinden CORS bypass
 // Sipariş listesini çeker, seçilen siparişi detaylı gösterir, kamera ile barkod okutma desteği içerir
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import { BrowserMultiFormatReader } from "@zxing/browser";
 
 // ✅ Ürünlere ait alt barkod eşleştirme listesi burada tutulur
@@ -23,7 +23,6 @@ export default function App() {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [scannedBarcodes, setScannedBarcodes] = useState([]);
   const [scanner, setScanner] = useState(null);
-  const readerRef = useRef(null);
 
   useEffect(() => {
     fetch("/api/orders")
@@ -33,7 +32,7 @@ export default function App() {
   }, []);
 
   const startScanner = () => {
-    if (!scanner && readerRef.current) {
+    if (!scanner) {
       const codeReader = new BrowserMultiFormatReader();
       codeReader
         .listVideoInputDevices()
@@ -41,7 +40,7 @@ export default function App() {
           if (videoInputDevices.length > 0) {
             codeReader.decodeFromVideoDevice(
               videoInputDevices[0].deviceId,
-              readerRef.current,
+              "reader",
               (result, err) => {
                 if (result) {
                   onScanSuccess(result.getText());
@@ -104,7 +103,7 @@ export default function App() {
           >
             Kamerayla Barkod Tara
           </button>
-          <div ref={readerRef} className="mb-4" style={{ width: "100%" }} />
+          <div id="reader" className="mb-4" style={{ width: "100%" }} />
 
           <ul className="space-y-2">
             {selectedOrder.lineItems.map((item, index) => (
