@@ -51,7 +51,7 @@ export default function App() {
             ],
           },
           (decodedText) => {
-            console.log("📦 Okunan Barkod:", decodedText);
+            console.log("📦 İşlenen Barkod:", decodedText.trim());
             onScanSuccess(decodedText);
           },
           (errorMessage) => {
@@ -64,13 +64,17 @@ export default function App() {
   };
 
   const onScanSuccess = (decodedText) => {
-    setScannedBarcodes((prev) => [...new Set([...prev, decodedText])]);
+    const trimmed = decodedText.trim();
+    setScannedBarcodes((prev) => [...new Set([...prev, trimmed])]);
   };
 
   const isItemScanned = (sku) => {
     const packages = packageMappings[sku];
-    if (!packages) return scannedBarcodes.includes(sku);
-    return packages.every((barkod) => scannedBarcodes.includes(barkod));
+    if (!packages)
+      return scannedBarcodes.some((b) => b.toLowerCase() === sku.toLowerCase());
+    return packages.every((barkod) =>
+      scannedBarcodes.some((scanned) => scanned.toLowerCase() === barkod.toLowerCase())
+    );
   };
 
   return (
@@ -135,7 +139,7 @@ export default function App() {
                       <li
                         key={i}
                         className={
-                          scannedBarcodes.includes(barkod)
+                          scannedBarcodes.some((b) => b.toLowerCase() === barkod.toLowerCase())
                             ? "text-green-600"
                             : "text-red-500 font-semibold"
                         }
