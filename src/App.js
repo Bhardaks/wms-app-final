@@ -1,13 +1,9 @@
-// React tabanlı WMS mobil web uygulaması + proxy üzerinden CORS bypass
-// Sipariş listesini çeker, seçilen siparişi detaylı gösterir, kamera ile barkod okutma desteği içerir
-
 import React, { useEffect, useState } from "react";
 import {
-  Html5Qrcode,
-  Html5QrcodeSupportedFormats,
-} from "html5-qrcode";
+  BrowserMultiFormatReader,
+} from "@zxing/library";
 
-// ✅ Ürünlere ait alt barkod eşleştirme listesi burada tutulur
+// 📦 Alt barkod eşlemeleri burada tanımlanır
 const packageMappings = {
   "BOH-YT-D-BE-01-B": [
     "BOH010325253010",
@@ -18,14 +14,13 @@ const packageMappings = {
     "BOH010330253010",
     "BOH010331253010",
   ],
-  // Diğer ürünler buraya eklenebilir
 };
 
 export default function App() {
   const [orders, setOrders] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [scannedBarcodes, setScannedBarcodes] = useState([]);
-  const [scanner, setScanner] = useState(null);
+  const [scannerStarted, setScannerStarted] = useState(false);
 
   useEffect(() => {
     fetch("/api/orders")
@@ -35,73 +30,67 @@ export default function App() {
   }, []);
 
   const startScanner = () => {
-    if (!scanner) {
-      const html5QrCode = new Html5Qrcode("reader");
-      html5QrCode
-        .start(
-          { facingMode: "environment" },
-          {
-            fps: 10,
-            qrbox: { width: 350, height: 350 },
-            formatsToSupport: [
-              Html5QrcodeSupportedFormats.CODE_128,
-              Html5QrcodeSupportedFormats.EAN_13,
-              Html5QrcodeSupportedFormats.UPC_A,
-              Html5QrcodeSupportedFormats.CODE_39,
-            ],
-          },
-          (decodedText) => {
-            console.log("📦 İşlenen Barkod:", decodedText.trim());
-            const onScanSuccess = (decodedText) => {
-  const clean = decodedText.trim().toUpperCase();
-  console.log("📦 Barkod Okundu:", clean);
+    if (scannerStarted) return;
 
-  let matched = false;
+    const codeReader = new BrowserMultiFormatReader();
 
-  if (selectedOrder) {
-    for (const item of selectedOrder.lineItems) {
-      const sku = item.sku;
-      const packages = packageMappings[sku] || [];
+    codeReader.listVideoInputDevices().then((videoInputDevices) => {
+      const selectedDeviceId = videoInputDevices[0]?.deviceId;
+      if (selectedDeviceId) {
+        codeReader.decodeFromVideoDevice(
+          selectedDeviceId,
+          "reader",
+          (result, err) => {
+            if (result) {
+              const clean = result.getText().trim().toUpperCase();
+              console.log("📦 Okunan Barkod:", clean);
 
-      if (packages.map((p) => p.toUpperCase()).includes(clean)) {
-        matched = true;
-        break;
-      }
-    }
-  }
+              let matched = false;
 
-  if (matched) {
-    document.getElementById("beep")?.play();
-    setScannedBarcodes((prev) => [...new Set([...prev, clean])]);
-  }
-};
+              if (selectedOrder) {
+                for (const item of selectedOrder.lineItems) {
+                  const sku = item.sku;
+                  const altBarcodes = packageMappings[sku] || [];
 
-          },
-          (errorMessage) => {
-            // sessizce yoksay
+                  if (altBarcodes.map(b => b.toUpperCase()).includes(clean)) {
+                    matched = true;
+                    if (!scannedBarcodes.includes(clean)) {
+                      setScannedBarcodes((prev) => [...prev, clean]);
+                      document.getElementById("beep")?.play();
+                    }
+                    break;
+                  }
+                }
+              }
+
+              if (!matched) {
+                alert("❌ Bu barkod bu siparişte tanımlı değil!");
+              }
+            }
           }
-        )
-        .catch((err) => console.error("Kamera başlatılamadı:", err));
-      setScanner(html5QrCode);
-    }
-  };
-
-  const onScanSuccess = (decodedText) => {
-    const trimmed = decodedText.trim();
-    setScannedBarcodes((prev) => [...new Set([...prev, trimmed])]);
+        );
+        setScannerStarted(true);
+      }
+    });
   };
 
   const isItemScanned = (sku) => {
     const packages = packageMappings[sku];
-    if (!packages)
-      return scannedBarcodes.some((b) => b.toLowerCase() === sku.toLowerCase());
+    if (!packages) return scannedBarcodes.includes(sku);
     return packages.every((barkod) =>
-      scannedBarcodes.some((scanned) => scanned.toLowerCase() === barkod.toLowerCase())
+      scannedBarcodes.includes(barkod.toUpperCase())
     );
   };
 
   return (
     <div className="p-4">
+      {/* 🔊 Ses dosyası */}
+      <audio
+        id="beep"
+        src="https://www.soundjay.com/buttons/sounds/beep-07.mp3"
+        preload="auto"
+      ></audio>
+
       <h1 className="text-xl font-bold mb-4">Sipariş Listesi</h1>
 
       {!selectedOrder && (
@@ -139,18 +128,33 @@ export default function App() {
           >
             Kamerayla Barkod Tara
           </button>
-          <div
-  id="reader"
-  className="mb-4 border border-gray-400 rounded"
-  style={{
-    width: "100%",
-    maxWidth: "300px",
-    height: "200px",
-    margin: "auto",
-    overflow: "hidden",
-  }}
-/>
 
+          <div
+            id="reader"
+            className="mb-4 border border-gray-400 rounded"
+            style={{
+              width: "100%",
+              maxWidth: "300px",
+              height: "200px",
+              margin: "auto",
+              overflow: "hidden",
+              position: "relative",
+            }}
+          >
+            {/* Görsel çerçeve */}
+            <div
+              style={{
+                position: "absolute",
+                top: "50%",
+                left: "50%",
+                width: "180px",
+                height: "60px",
+                transform: "translate(-50%, -50%)",
+                border: "2px solid limegreen",
+                borderRadius: "4px",
+              }}
+            ></div>
+          </div>
 
           <ul className="space-y-2">
             {selectedOrder.lineItems.map((item, index) => (
@@ -166,15 +170,23 @@ export default function App() {
                 {packageMappings[item.sku] && (
                   <ul className="mt-2 text-sm">
                     {packageMappings[item.sku].map((barkod, i) => (
-                      <li
-                        key={i}
-                        className={
-                          scannedBarcodes.some((b) => b.toLowerCase() === barkod.toLowerCase())
-                            ? "text-green-600"
-                            : "text-red-500 font-semibold"
-                        }
-                      >
-                        Paket Barkod: {barkod}
+                      <li key={i}>
+                        <span
+                          style={{
+                            textDecoration: scannedBarcodes.includes(
+                              barkod.toUpperCase()
+                            )
+                              ? "line-through"
+                              : "none",
+                          }}
+                          className={
+                            scannedBarcodes.includes(barkod.toUpperCase())
+                              ? "text-green-600"
+                              : "text-red-500 font-semibold"
+                          }
+                        >
+                          Paket Barkod: {barkod}
+                        </span>
                       </li>
                     ))}
                   </ul>
