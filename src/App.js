@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from "react";
-import {
-  BrowserMultiFormatReader,
-} from "@zxing/library";
+import { BrowserMultiFormatReader } from "@zxing/library";
 
-// 📦 Alt barkod eşlemeleri burada tanımlanır
+// Barkod eşleşme tablosu (ana SKU'ya bağlı alt barkodlar)
 const packageMappings = {
   "BOH-YT-D-BE-01-B": [
     "BOH010325253010",
@@ -34,57 +32,53 @@ export default function App() {
 
     const codeReader = new BrowserMultiFormatReader();
 
-    codeReader.listVideoInputDevices().then((videoInputDevices) => {
-      const selectedDeviceId = videoInputDevices[0]?.deviceId;
-      if (selectedDeviceId) {
-        codeReader.decodeFromVideoDevice(
-          selectedDeviceId,
-          "reader",
-          (result, err) => {
-            if (result) {
-              const clean = result.getText().trim().toUpperCase();
-              console.log("📦 Okunan Barkod:", clean);
+    codeReader.listVideoInputDevices().then((devices) => {
+      const cameraId = devices[0]?.deviceId;
+      if (!cameraId) return alert("📷 Kamera bulunamadı.");
 
-              let matched = false;
+      codeReader.decodeFromVideoDevice(cameraId, "reader", (result) => {
+        if (result) {
+          const clean = result.getText().trim().toUpperCase();
+          console.log("📦 Okunan Barkod:", clean);
 
-              if (selectedOrder) {
-                for (const item of selectedOrder.lineItems) {
-                  const sku = item.sku;
-                  const altBarcodes = packageMappings[sku] || [];
+          let matched = false;
 
-                  if (altBarcodes.map(b => b.toUpperCase()).includes(clean)) {
-                    matched = true;
-                    if (!scannedBarcodes.includes(clean)) {
-                      setScannedBarcodes((prev) => [...prev, clean]);
-                      document.getElementById("beep")?.play();
-                    }
-                    break;
-                  }
+          if (selectedOrder) {
+            for (const item of selectedOrder.lineItems) {
+              const sku = item.sku;
+              const altBarcodes = packageMappings[sku] || [];
+
+              if (altBarcodes.map(b => b.toUpperCase()).includes(clean)) {
+                matched = true;
+                if (!scannedBarcodes.includes(clean)) {
+                  setScannedBarcodes(prev => [...prev, clean]);
+                  document.getElementById("beep")?.play();
                 }
-              }
-
-              if (!matched) {
-                alert("❌ Bu barkod bu siparişte tanımlı değil!");
+                break;
               }
             }
           }
-        );
-        setScannerStarted(true);
-      }
+
+          if (!matched) {
+            alert("❌ Bu barkod bu siparişte tanımlı değil!");
+          }
+        }
+      });
+
+      setScannerStarted(true);
     });
   };
 
   const isItemScanned = (sku) => {
-    const packages = packageMappings[sku];
-    if (!packages) return scannedBarcodes.includes(sku);
-    return packages.every((barkod) =>
-      scannedBarcodes.includes(barkod.toUpperCase())
+    const altBarcodes = packageMappings[sku];
+    if (!altBarcodes) return false;
+    return altBarcodes.every(b =>
+      scannedBarcodes.includes(b.toUpperCase())
     );
   };
 
   return (
     <div className="p-4">
-      {/* 🔊 Ses dosyası */}
       <audio
         id="beep"
         src="https://www.soundjay.com/buttons/sounds/beep-07.mp3"
@@ -113,8 +107,8 @@ export default function App() {
       {selectedOrder && (
         <div>
           <button
-            className="mb-4 px-4 py-2 bg-gray-300 rounded"
             onClick={() => setSelectedOrder(null)}
+            className="mb-4 px-4 py-2 bg-gray-300 rounded"
           >
             ← Geri Dön
           </button>
@@ -122,63 +116,66 @@ export default function App() {
           <h2 className="text-lg font-bold mb-2">
             Sipariş #{selectedOrder.number}
           </h2>
+
           <button
-            className="mb-4 px-4 py-2 bg-blue-500 text-white rounded"
             onClick={startScanner}
+            className="mb-4 px-4 py-2 bg-blue-500 text-white rounded"
           >
             Kamerayla Barkod Tara
           </button>
 
+          {/* Kamera ekranı */}
           <div
-  id="reader"
-  className="mb-4 border border-gray-400 rounded"
-  style={{
-    width: "100%",
-    maxWidth: "320px",
-    height: "240px",
-    margin: "auto",
-    position: "relative",
-    backgroundColor: "#000",
-    overflow: "visible", // önemli!
-  }}
->
-  {/* Yeşil kılavuz kutu */}
-  <div
-    style={{
-      position: "absolute",
-      top: "50%",
-      left: "50%",
-      width: "180px",
-      height: "60px",
-      transform: "translate(-50%, -50%)",
-      border: "2px solid limegreen",
-      borderRadius: "4px",
-      zIndex: 2,
-    }}
-  ></div>
-</div>
+            id="reader"
+            className="mb-4 border border-gray-400 rounded"
+            style={{
+              width: "100%",
+              maxWidth: "320px",
+              height: "240px",
+              margin: "auto",
+              position: "relative",
+              backgroundColor: "#000",
+              overflow: "visible",
+            }}
+          >
+            <div
+              style={{
+                position: "absolute",
+                top: "50%",
+                left: "50%",
+                width: "160px",
+                height: "60px",
+                transform: "translate(-50%, -50%)",
+                border: "2px solid limegreen",
+                borderRadius: "4px",
+                zIndex: 2,
+                pointerEvents: "none",
+              }}
+            ></div>
+          </div>
 
-
+          {/* Sipariş ürünleri ve barkod eşleşmeleri */}
           <ul className="space-y-2">
             {selectedOrder.lineItems.map((item, index) => (
               <li
                 key={index}
                 className={`p-3 rounded shadow ${
-                  isItemScanned(item.sku) ? "bg-green-100" : "bg-white"
+                  isItemScanned(item.sku)
+                    ? "bg-green-100"
+                    : "bg-white"
                 }`}
               >
                 <div className="font-semibold">{item.name}</div>
                 <div>Barkod (SKU): {item.sku}</div>
                 <div>Adet: {item.quantity}</div>
+
                 {packageMappings[item.sku] && (
                   <ul className="mt-2 text-sm">
                     {packageMappings[item.sku].map((barkod, i) => (
                       <li key={i}>
                         <span
                           style={{
-                            textDecoration: scannedBarcodes.includes(
-                              barkod.toUpperCase()
-                            )
+                            textDecoration: scannedBarcodes.includes(barkod.toUpperCase())
                               ? "line-through"
                               : "none",
                           }}
