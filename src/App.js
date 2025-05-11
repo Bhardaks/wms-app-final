@@ -1,7 +1,7 @@
 // React tabanlı WMS mobil web uygulaması + proxy üzerinden CORS bypass
 // Sipariş listesini çeker, seçilen siparişi detaylı gösterir, kamera ile barkod okutma desteği içerir
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { BrowserMultiFormatReader } from "@zxing/browser";
 
 // ✅ Ürünlere ait alt barkod eşleştirme listesi burada tutulur
@@ -23,6 +23,7 @@ export default function App() {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [scannedBarcodes, setScannedBarcodes] = useState([]);
   const [scanner, setScanner] = useState(null);
+  const readerRef = useRef(null);
 
   useEffect(() => {
     fetch("/api/orders")
@@ -32,25 +33,22 @@ export default function App() {
   }, []);
 
   const startScanner = () => {
-    if (!scanner) {
+    if (!scanner && readerRef.current) {
       const codeReader = new BrowserMultiFormatReader();
       codeReader
         .listVideoInputDevices()
         .then((videoInputDevices) => {
           if (videoInputDevices.length > 0) {
-            // DOM tam yüklendikten sonra çalıştır
-            setTimeout(() => {
-              codeReader.decodeFromVideoDevice(
-                videoInputDevices[0].deviceId,
-                "reader",
-                (result, err) => {
-                  if (result) {
-                    onScanSuccess(result.getText());
-                  }
+            codeReader.decodeFromVideoDevice(
+              videoInputDevices[0].deviceId,
+              readerRef.current,
+              (result, err) => {
+                if (result) {
+                  onScanSuccess(result.getText());
                 }
-              );
-              setScanner(codeReader);
-            }, 500);
+              }
+            );
+            setScanner(codeReader);
           }
         })
         .catch((err) => console.error("Kamera hatası:", err));
@@ -106,7 +104,7 @@ export default function App() {
           >
             Kamerayla Barkod Tara
           </button>
-          <div id="reader" className="mb-4" style={{ width: "100%" }} />
+          <div ref={readerRef} className="mb-4" style={{ width: "100%" }} />
 
           <ul className="space-y-2">
             {selectedOrder.lineItems.map((item, index) => (
