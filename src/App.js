@@ -1,11 +1,7 @@
-// React tabanlı WMS mobil web uygulaması + proxy üzerinden CORS bypass
-// Sipariş listesini çeker, seçilen siparişi detaylı gösterir, kamera ile barkod okutma desteği içerir
-
 import React, { useEffect, useState } from "react";
 import {
-  Html5Qrcode,
-  Html5QrcodeSupportedFormats,
-} from "html5-qrcode";
+  BrowserMultiFormatReader,
+} from "@zxing/library";
 
 // ✅ Ürünlere ait alt barkod eşleştirme listesi burada tutulur
 const packageMappings = {
@@ -18,14 +14,13 @@ const packageMappings = {
     "BOH010330253010",
     "BOH010331253010",
   ],
-  // Diğer ürünler buraya eklenebilir
 };
 
 export default function App() {
   const [orders, setOrders] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [scannedBarcodes, setScannedBarcodes] = useState([]);
-  const [scanner, setScanner] = useState(null);
+  const [scannerStarted, setScannerStarted] = useState(false);
 
   useEffect(() => {
     fetch("/api/orders")
@@ -35,45 +30,34 @@ export default function App() {
   }, []);
 
   const startScanner = () => {
-    if (!scanner) {
-      const html5QrCode = new Html5Qrcode("reader");
-      html5QrCode
-        .start(
-          { facingMode: "environment" },
-          {
-            fps: 10,
-            qrbox: { width: 350, height: 350 },
-            formatsToSupport: [
-              Html5QrcodeSupportedFormats.CODE_128,
-              Html5QrcodeSupportedFormats.EAN_13,
-              Html5QrcodeSupportedFormats.UPC_A,
-              Html5QrcodeSupportedFormats.CODE_39,
-            ],
-          },
-          (decodedText) => {
-            console.log("📦 İşlenen Barkod:", decodedText.trim());
-            onScanSuccess(decodedText);
-          },
-          (errorMessage) => {
-            // sessizce yoksay
-          }
-        )
-        .catch((err) => console.error("Kamera başlatılamadı:", err));
-      setScanner(html5QrCode);
-    }
-  };
+    if (scannerStarted) return;
 
-  const onScanSuccess = (decodedText) => {
-    const trimmed = decodedText.trim();
-    setScannedBarcodes((prev) => [...new Set([...prev, trimmed])]);
+    const codeReader = new BrowserMultiFormatReader();
+
+    codeReader.listVideoInputDevices().then((videoInputDevices) => {
+      const selectedDeviceId = videoInputDevices[0]?.deviceId;
+      if (selectedDeviceId) {
+        codeReader.decodeFromVideoDevice(
+          selectedDeviceId,
+          "reader",
+          (result, err) => {
+            if (result) {
+              const text = result.getText().trim().toUpperCase();
+              console.log("📦 Okunan Barkod:", text);
+              setScannedBarcodes((prev) => [...new Set([...prev, text])]);
+            }
+          }
+        );
+        setScannerStarted(true);
+      }
+    });
   };
 
   const isItemScanned = (sku) => {
     const packages = packageMappings[sku];
-    if (!packages)
-      return scannedBarcodes.some((b) => b.toLowerCase() === sku.toLowerCase());
+    if (!packages) return scannedBarcodes.includes(sku);
     return packages.every((barkod) =>
-      scannedBarcodes.some((scanned) => scanned.toLowerCase() === barkod.toLowerCase())
+      scannedBarcodes.includes(barkod.toUpperCase())
     );
   };
 
@@ -139,7 +123,7 @@ export default function App() {
                       <li
                         key={i}
                         className={
-                          scannedBarcodes.some((b) => b.toLowerCase() === barkod.toLowerCase())
+                          scannedBarcodes.includes(barkod.toUpperCase())
                             ? "text-green-600"
                             : "text-red-500 font-semibold"
                         }
