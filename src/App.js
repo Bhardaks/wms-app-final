@@ -1,7 +1,13 @@
-import React, { useEffect, useState } from "react";
-import { BrowserMultiFormatReader } from "@zxing/browser";
+// React tabanlı WMS mobil web uygulaması + proxy üzerinden CORS bypass
+// Sipariş listesini çeker, seçilen siparişi detaylı gösterir, kamera ile barkod okutma desteği içerir
 
-// Alt barkod eşleşme tablosu
+import React, { useEffect, useState } from "react";
+import {
+  Html5Qrcode,
+  Html5QrcodeSupportedFormats,
+} from "html5-qrcode";
+
+// ✅ Ürünlere ait alt barkod eşleştirme listesi burada tutulur
 const packageMappings = {
   "BOH-YT-D-BE-01-B": [
     "BOH010325253010",
@@ -12,6 +18,7 @@ const packageMappings = {
     "BOH010330253010",
     "BOH010331253010",
   ],
+  // Diğer ürünler buraya eklenebilir
 };
 
 export default function App() {
@@ -24,95 +31,74 @@ export default function App() {
     fetch("/api/orders")
       .then((res) => res.json())
       .then((data) => setOrders(data.items))
-      .catch((err) => console.error("API hatası:", err));
+      .catch((err) => console.error("API Hatası:", err));
   }, []);
 
-  const startScanner = async () => {
-    if (scanner) return;
-
-    const codeReader = new BrowserMultiFormatReader();
-
-    try {
-      const devices = await codeReader.listVideoInputDevices();
-      const cameraId = devices[0]?.deviceId;
-
-      if (!cameraId) {
-        alert("📷 Kamera bulunamadı.");
-        return;
-      }
-
-      await codeReader.decodeFromVideoDevice(
-        cameraId,
-        "reader",
-        (result, error) => {
-          if (result) {
-            const text = result.getText().trim().toUpperCase();
-            console.log("📦 Okunan barkod:", text);
-
-            let matched = false;
-
-            for (const item of selectedOrder.lineItems) {
-              const sku = item.sku;
-              const altCodes = packageMappings[sku] || [];
-
-              if (altCodes.includes(text)) {
-                if (!scannedBarcodes.includes(text)) {
-                  setScannedBarcodes((prev) => [...prev, text]);
-                  document.getElementById("beep")?.play();
-                }
-                matched = true;
-                break;
-              }
-            }
-
-            if (!matched) {
-              alert("❌ Bu barkod bu siparişte tanımlı değil.");
-            }
+  const startScanner = () => {
+    if (!scanner) {
+      const html5QrCode = new Html5Qrcode("reader");
+      html5QrCode
+        .start(
+          { facingMode: "environment" },
+          {
+            fps: 10,
+            qrbox: { width: 350, height: 350 },
+            formatsToSupport: [
+              Html5QrcodeSupportedFormats.CODE_128,
+              Html5QrcodeSupportedFormats.EAN_13,
+              Html5QrcodeSupportedFormats.UPC_A,
+              Html5QrcodeSupportedFormats.CODE_39,
+            ],
+          },
+          (decodedText) => {
+            console.log("📦 Okunan Barkod:", decodedText);
+            onScanSuccess(decodedText);
+          },
+          (errorMessage) => {
+            // sessizce yoksay
           }
-        }
-      );
-
-      setScanner(codeReader);
-    } catch (err) {
-      console.error("Kamera başlatma hatası:", err);
+        )
+        .catch((err) => console.error("Kamera başlatılamadı:", err));
+      setScanner(html5QrCode);
     }
   };
 
-  const isItemComplete = (sku) => {
-    const parts = packageMappings[sku];
-    return parts?.every((b) => scannedBarcodes.includes(b)) || false;
+  const onScanSuccess = (decodedText) => {
+    setScannedBarcodes((prev) => [...new Set([...prev, decodedText])]);
+  };
+
+  const isItemScanned = (sku) => {
+    const packages = packageMappings[sku];
+    if (!packages) return scannedBarcodes.includes(sku);
+    return packages.every((barkod) => scannedBarcodes.includes(barkod));
   };
 
   return (
     <div className="p-4">
-      {/* Ses uyarısı */}
-      <audio id="beep" src="https://www.soundjay.com/buttons/sounds/beep-07.mp3" preload="auto"></audio>
-
       <h1 className="text-xl font-bold mb-4">Sipariş Listesi</h1>
 
-      {!selectedOrder &&
-        orders.map((order) => (
-          <div
-            key={order._id}
-            className="p-3 mb-2 bg-white shadow rounded cursor-pointer"
-            onClick={() => setSelectedOrder(order)}
-          >
-            <strong>Sipariş No:</strong> {order.number}
-            <div>
-              {order.billingInfo.firstName} {order.billingInfo.lastName}
-            </div>
-          </div>
-        ))}
+      {!selectedOrder && (
+        <ul className="space-y-2">
+          {orders.map((order) => (
+            <li
+              key={order._id}
+              className="p-3 rounded shadow bg-white cursor-pointer"
+              onClick={() => setSelectedOrder(order)}
+            >
+              <div className="font-semibold">Sipariş No: {order.number}</div>
+              <div>
+                {order.billingInfo?.firstName} {order.billingInfo?.lastName}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {selectedOrder && (
         <div>
           <button
             className="mb-4 px-4 py-2 bg-gray-300 rounded"
-            onClick={() => {
-              setSelectedOrder(null);
-              setScannedBarcodes([]);
-              setScanner(null);
-            }}
+            onClick={() => setSelectedOrder(null)}
           >
             ← Geri Dön
           </button>
@@ -120,65 +106,38 @@ export default function App() {
           <h2 className="text-lg font-bold mb-2">
             Sipariş #{selectedOrder.number}
           </h2>
-
           <button
+            className="mb-4 px-4 py-2 bg-blue-500 text-white rounded"
             onClick={startScanner}
-            className="mb-4 px-4 py-2 bg-blue-600 text-white rounded"
           >
             Kamerayla Barkod Tara
           </button>
-
-          {/* Kamera alanı */}
           <div
             id="reader"
-            style={{
-              width: "100%",
-              maxWidth: "320px",
-              height: "240px",
-              margin: "auto",
-              border: "1px solid #ccc",
-              borderRadius: "6px",
-              position: "relative",
-              backgroundColor: "#000",
-            }}
-          >
-            <div
-              style={{
-                position: "absolute",
-                top: "50%",
-                left: "50%",
-                width: "160px",
-                height: "60px",
-                transform: "translate(-50%, -50%)",
-                border: "2px solid limegreen",
-                borderRadius: "4px",
-                zIndex: 2,
-              }}
-            ></div>
-          </div>
+            className="mb-4 border border-gray-400 rounded"
+            style={{ width: "100%", maxWidth: "400px", height: "350px", margin: "auto" }}
+          />
 
-          {/* Ürün listesi */}
-          <div className="mt-4 space-y-4">
-            {selectedOrder.lineItems.map((item, i) => (
-              <div
-                key={i}
+          <ul className="space-y-2">
+            {selectedOrder.lineItems.map((item, index) => (
+              <li
+                key={index}
                 className={`p-3 rounded shadow ${
-                  isItemComplete(item.sku) ? "bg-green-100" : "bg-white"
+                  isItemScanned(item.sku) ? "bg-green-100" : "bg-white"
                 }`}
               >
-                <strong>{item.name}</strong>
-                <div>SKU: {item.sku}</div>
+                <div className="font-semibold">{item.name}</div>
+                <div>Barkod (SKU): {item.sku}</div>
                 <div>Adet: {item.quantity}</div>
-
                 {packageMappings[item.sku] && (
                   <ul className="mt-2 text-sm">
-                    {packageMappings[item.sku].map((barkod, j) => (
+                    {packageMappings[item.sku].map((barkod, i) => (
                       <li
-                        key={j}
+                        key={i}
                         className={
                           scannedBarcodes.includes(barkod)
-                            ? "text-green-600 line-through"
-                            : "text-red-600 font-semibold"
+                            ? "text-green-600"
+                            : "text-red-500 font-semibold"
                         }
                       >
                         Paket Barkod: {barkod}
@@ -186,9 +145,9 @@ export default function App() {
                     ))}
                   </ul>
                 )}
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
       )}
     </div>
