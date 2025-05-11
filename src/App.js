@@ -52,7 +52,30 @@ export default function App() {
           },
           (decodedText) => {
             console.log("📦 İşlenen Barkod:", decodedText.trim());
-            onScanSuccess(decodedText);
+            const onScanSuccess = (decodedText) => {
+  const clean = decodedText.trim().toUpperCase();
+  console.log("📦 Barkod Okundu:", clean);
+
+  let matched = false;
+
+  if (selectedOrder) {
+    for (const item of selectedOrder.lineItems) {
+      const sku = item.sku;
+      const packages = packageMappings[sku] || [];
+
+      if (packages.map((p) => p.toUpperCase()).includes(clean)) {
+        matched = true;
+        break;
+      }
+    }
+  }
+
+  if (matched) {
+    document.getElementById("beep")?.play();
+    setScannedBarcodes((prev) => [...new Set([...prev, clean])]);
+  }
+};
+
           },
           (errorMessage) => {
             // sessizce yoksay
