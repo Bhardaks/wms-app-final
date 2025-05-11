@@ -2,7 +2,7 @@
 // Sipariş listesini çeker, seçilen siparişi detaylı gösterir, kamera ile barkod okutma desteği içerir
 
 import React, { useEffect, useState } from "react";
-import { Html5Qrcode } from "html5-qrcode";
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
 
 // ✅ Ürünlere ait alt barkod eşleştirme listesi burada tutulur
 const packageMappings = {
@@ -40,6 +40,12 @@ export default function App() {
           {
             fps: 10,
             qrbox: { width: 250, height: 250 },
+            formatsToSupport: [
+              Html5QrcodeSupportedFormats.CODE_128,
+              Html5QrcodeSupportedFormats.EAN_13,
+              Html5QrcodeSupportedFormats.UPC_A,
+              Html5QrcodeSupportedFormats.CODE_39,
+            ],
           },
           (decodedText) => {
             onScanSuccess(decodedText);
