@@ -130,31 +130,34 @@ export default function App() {
           </button>
 
           <div
-            id="reader"
-            className="mb-4 border border-gray-400 rounded"
-            style={{
-              width: "100%",
-              maxWidth: "300px",
-              height: "200px",
-              margin: "auto",
-              overflow: "hidden",
-              position: "relative",
-            }}
-          >
-            {/* Görsel çerçeve */}
-            <div
-              style={{
-                position: "absolute",
-                top: "50%",
-                left: "50%",
-                width: "180px",
-                height: "60px",
-                transform: "translate(-50%, -50%)",
-                border: "2px solid limegreen",
-                borderRadius: "4px",
-              }}
-            ></div>
-          </div>
+  id="reader"
+  className="mb-4 border border-gray-400 rounded"
+  style={{
+    width: "100%",
+    maxWidth: "320px",
+    height: "240px",
+    margin: "auto",
+    position: "relative",
+    backgroundColor: "#000",
+    overflow: "visible", // önemli!
+  }}
+>
+  {/* Yeşil kılavuz kutu */}
+  <div
+    style={{
+      position: "absolute",
+      top: "50%",
+      left: "50%",
+      width: "180px",
+      height: "60px",
+      transform: "translate(-50%, -50%)",
+      border: "2px solid limegreen",
+      borderRadius: "4px",
+      zIndex: 2,
+    }}
+  ></div>
+</div>
+
 
           <ul className="space-y-2">
             {selectedOrder.lineItems.map((item, index) => (
