@@ -10,6 +10,8 @@ export default function App() {
 
   useEffect(() => {
     fetch("https://b2barveshome.com/_functions/orders")
+
+
       .then((res) => res.json())
       .then((data) => setOrders(data.items));
   }, []);
