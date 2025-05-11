@@ -38,16 +38,19 @@ export default function App() {
         .listVideoInputDevices()
         .then((videoInputDevices) => {
           if (videoInputDevices.length > 0) {
-            codeReader.decodeFromVideoDevice(
-              videoInputDevices[0].deviceId,
-              "reader",
-              (result, err) => {
-                if (result) {
-                  onScanSuccess(result.getText());
+            // DOM tam yüklendikten sonra çalıştır
+            setTimeout(() => {
+              codeReader.decodeFromVideoDevice(
+                videoInputDevices[0].deviceId,
+                "reader",
+                (result, err) => {
+                  if (result) {
+                    onScanSuccess(result.getText());
+                  }
                 }
-              }
-            );
-            setScanner(codeReader);
+              );
+              setScanner(codeReader);
+            }, 500);
           }
         })
         .catch((err) => console.error("Kamera hatası:", err));
