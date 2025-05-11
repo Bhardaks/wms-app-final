@@ -2,7 +2,7 @@
 // Sipariş listesini çeker, seçilen siparişi detaylı gösterir, kamera ile barkod okutma desteği içerir
 
 import React, { useEffect, useState } from "react";
-import { Html5QrcodeScanner } from "html5-qrcode";
+import { BrowserMultiFormatReader } from "@zxing/browser";
 
 // ✅ Ürünlere ait alt barkod eşleştirme listesi burada tutulur
 const packageMappings = {
@@ -33,20 +33,30 @@ export default function App() {
 
   const startScanner = () => {
     if (!scanner) {
-      const newScanner = new Html5QrcodeScanner("reader", {
-        fps: 10,
-        qrbox: 250,
-      });
-      newScanner.render(onScanSuccess, onScanFailure);
-      setScanner(newScanner);
+      const codeReader = new BrowserMultiFormatReader();
+      codeReader
+        .listVideoInputDevices()
+        .then((videoInputDevices) => {
+          if (videoInputDevices.length > 0) {
+            codeReader.decodeFromVideoDevice(
+              videoInputDevices[0].deviceId,
+              "reader",
+              (result, err) => {
+                if (result) {
+                  onScanSuccess(result.getText());
+                }
+              }
+            );
+            setScanner(codeReader);
+          }
+        })
+        .catch((err) => console.error("Kamera hatası:", err));
     }
   };
 
   const onScanSuccess = (decodedText) => {
     setScannedBarcodes((prev) => [...new Set([...prev, decodedText])]);
   };
-
-  const onScanFailure = (error) => {};
 
   const isItemScanned = (sku) => {
     const packages = packageMappings[sku];
@@ -93,7 +103,7 @@ export default function App() {
           >
             Kamerayla Barkod Tara
           </button>
-          <div id="reader" className="mb-4" />
+          <div id="reader" className="mb-4" style={{ width: "100%" }} />
 
           <ul className="space-y-2">
             {selectedOrder.lineItems.map((item, index) => (
