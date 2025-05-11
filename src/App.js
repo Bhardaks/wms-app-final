@@ -1,3 +1,5 @@
+// React tabanlı WMS mobil web uygulaması + proxy üzerinden CORS bypass
+// Sipariş listesini çeker, seçilen siparişi detaylı gösterir, kamera ile barkod okutma desteği içerir
 
 import React, { useEffect, useState } from "react";
 import { Html5QrcodeScanner } from "html5-qrcode";
@@ -8,12 +10,12 @@ export default function App() {
   const [scannedBarcodes, setScannedBarcodes] = useState([]);
   const [scanner, setScanner] = useState(null);
 
+  // ✅ DÜZELTİLDİ: Artık doğrudan Wix'e değil, kendi proxy endpoint'ine istek atılıyor
   useEffect(() => {
-    fetch("https://b2barveshome.com/_functions/orders")
-
-
+    fetch("/api/orders")
       .then((res) => res.json())
-      .then((data) => setOrders(data.items));
+      .then((data) => setOrders(data.items))
+      .catch((err) => console.error("API Hatası:", err));
   }, []);
 
   const startScanner = () => {
@@ -31,9 +33,7 @@ export default function App() {
     setScannedBarcodes((prev) => [...new Set([...prev, decodedText])]);
   };
 
-  const onScanFailure = (error) => {
-    // silently fail
-  };
+  const onScanFailure = (error) => {};
 
   const isItemScanned = (sku) => scannedBarcodes.includes(sku);
 
