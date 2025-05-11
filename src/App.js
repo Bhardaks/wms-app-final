@@ -9,7 +9,8 @@ let matchedBarcodes = [];
 $w.onReady(function () {
   $w("#camera1").start();
   $w("#camera1").onBarcodeScanned((barcode) => {
-    checkBarcode(barcode);
+    console.log("Okunan barkod:", barcode);
+    checkBarcode(barcode.trim());
   });
 });
 
@@ -24,7 +25,8 @@ function checkBarcode(scanned) {
     .eq("mainSKU", mainSKU)
     .find()
     .then((res) => {
-      const subBarcodes = res.items.map(item => item.subBarcode);
+      const subBarcodes = res.items.map(item => item.subBarcode.trim());
+      console.log("Alt barkodlar:", subBarcodes);
 
       if (subBarcodes.includes(scanned)) {
         if (!matchedBarcodes.includes(scanned)) {
@@ -38,14 +40,19 @@ function checkBarcode(scanned) {
         showError("Yanlış barkod okutuldu.");
         playErrorSound();
       }
+    })
+    .catch((err) => {
+      console.error("Barkod verisi alınırken hata:", err);
+      showError("Veri alınamadı.");
     });
 }
 
 function markAsMatched(barcode) {
-  const itemBox = $w("#repeater1").forItems([barcode]);
-  if (itemBox.length) {
-    itemBox[0].$item("#textBarcode").style.textDecoration = "line-through";
-  }
+  $w("#repeater1").forEachItem(($item, itemData) => {
+    if (itemData.subBarcode && itemData.subBarcode.trim() === barcode) {
+      $item("#textBarcode").style.textDecoration = "line-through";
+    }
+  });
 }
 
 function showError(message) {
