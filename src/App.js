@@ -2,7 +2,10 @@
 // Sipariş listesini çeker, seçilen siparişi detaylı gösterir, kamera ile barkod okutma desteği içerir
 
 import React, { useEffect, useState } from "react";
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
+import {
+  Html5Qrcode,
+  Html5QrcodeSupportedFormats,
+} from "html5-qrcode";
 
 // ✅ Ürünlere ait alt barkod eşleştirme listesi burada tutulur
 const packageMappings = {
@@ -39,7 +42,7 @@ export default function App() {
           { facingMode: "environment" },
           {
             fps: 10,
-            qrbox: { width: 250, height: 250 },
+            qrbox: { width: 350, height: 350 },
             formatsToSupport: [
               Html5QrcodeSupportedFormats.CODE_128,
               Html5QrcodeSupportedFormats.EAN_13,
@@ -48,10 +51,11 @@ export default function App() {
             ],
           },
           (decodedText) => {
+            console.log("📦 Okunan Barkod:", decodedText);
             onScanSuccess(decodedText);
           },
           (errorMessage) => {
-            // hatayı yoksay
+            // sessizce yoksay
           }
         )
         .catch((err) => console.error("Kamera başlatılamadı:", err));
@@ -108,7 +112,11 @@ export default function App() {
           >
             Kamerayla Barkod Tara
           </button>
-          <div id="reader" className="mb-4" style={{ width: "100%", height: "300px" }} />
+          <div
+            id="reader"
+            className="mb-4 border border-gray-400 rounded"
+            style={{ width: "100%", maxWidth: "400px", height: "350px", margin: "auto" }}
+          />
 
           <ul className="space-y-2">
             {selectedOrder.lineItems.map((item, index) => (
