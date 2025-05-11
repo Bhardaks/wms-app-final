@@ -1,155 +1,63 @@
-// React tabanlı WMS mobil web uygulaması + proxy üzerinden CORS bypass
-// Sipariş listesini çeker, seçilen siparişi detaylı gösterir, kamera ile barkod okutma desteği içerir
+// WMS Kamera ile Barkod Eşleştirme Sistemi - Velo (Wix)
 
-import React, { useEffect, useState } from "react";
-import {
-  Html5Qrcode,
-  Html5QrcodeSupportedFormats,
-} from "html5-qrcode";
+import { session } from 'wix-storage';
+import wixWindow from 'wix-window';
+import wixData from 'wix-data';
 
-// ✅ Ürünlere ait alt barkod eşleştirme listesi burada tutulur
-const packageMappings = {
-  "BOH-YT-D-BE-01-B": [
-    "BOH010325253010",
-    "BOH010326253010",
-    "BOH010327253010",
-    "BOH010328253010",
-    "BOH010329253010",
-    "BOH010330253010",
-    "BOH010331253010",
-  ],
-  // Diğer ürünler buraya eklenebilir
-};
+let matchedBarcodes = [];
 
-export default function App() {
-  const [orders, setOrders] = useState([]);
-  const [selectedOrder, setSelectedOrder] = useState(null);
-  const [scannedBarcodes, setScannedBarcodes] = useState([]);
-  const [scanner, setScanner] = useState(null);
+$w.onReady(function () {
+  $w("#camera1").start();
+  $w("#camera1").onBarcodeScanned((barcode) => {
+    checkBarcode(barcode);
+  });
+});
 
-  useEffect(() => {
-    fetch("/api/orders")
-      .then((res) => res.json())
-      .then((data) => setOrders(data.items))
-      .catch((err) => console.error("API Hatası:", err));
-  }, []);
+function checkBarcode(scanned) {
+  const mainSKU = session.getItem("selectedMainSKU");
+  if (!mainSKU) {
+    showError("Ana ürün seçilmedi.");
+    return;
+  }
 
-  const startScanner = () => {
-    if (!scanner) {
-      const html5QrCode = new Html5Qrcode("reader");
-      html5QrCode
-        .start(
-          { facingMode: "environment" },
-          {
-            fps: 10,
-            qrbox: { width: 350, height: 350 },
-            formatsToSupport: [
-              Html5QrcodeSupportedFormats.CODE_128,
-              Html5QrcodeSupportedFormats.EAN_13,
-              Html5QrcodeSupportedFormats.UPC_A,
-              Html5QrcodeSupportedFormats.CODE_39,
-            ],
-          },
-          (decodedText) => {
-            console.log("📦 Okunan Barkod:", decodedText);
-            onScanSuccess(decodedText);
-          },
-          (errorMessage) => {
-            // sessizce yoksay
-          }
-        )
-        .catch((err) => console.error("Kamera başlatılamadı:", err));
-      setScanner(html5QrCode);
-    }
-  };
+  wixData.query("SubBarcodes")
+    .eq("mainSKU", mainSKU)
+    .find()
+    .then((res) => {
+      const subBarcodes = res.items.map(item => item.subBarcode);
 
-  const onScanSuccess = (decodedText) => {
-    setScannedBarcodes((prev) => [...new Set([...prev, decodedText])]);
-  };
+      if (subBarcodes.includes(scanned)) {
+        if (!matchedBarcodes.includes(scanned)) {
+          matchedBarcodes.push(scanned);
+          markAsMatched(scanned);
+          playSuccessSound();
+        } else {
+          showError("Bu barkod zaten okutuldu.");
+        }
+      } else {
+        showError("Yanlış barkod okutuldu.");
+        playErrorSound();
+      }
+    });
+}
 
-  const isItemScanned = (sku) => {
-    const packages = packageMappings[sku];
-    if (!packages) return scannedBarcodes.includes(sku);
-    return packages.every((barkod) => scannedBarcodes.includes(barkod));
-  };
+function markAsMatched(barcode) {
+  const itemBox = $w("#repeater1").forItems([barcode]);
+  if (itemBox.length) {
+    itemBox[0].$item("#textBarcode").style.textDecoration = "line-through";
+  }
+}
 
-  return (
-    <div className="p-4">
-      <h1 className="text-xl font-bold mb-4">Sipariş Listesi</h1>
+function showError(message) {
+  $w("#errorText").text = message;
+  $w("#errorText").show("fade");
+  setTimeout(() => $w("#errorText").hide("fade"), 3000);
+}
 
-      {!selectedOrder && (
-        <ul className="space-y-2">
-          {orders.map((order) => (
-            <li
-              key={order._id}
-              className="p-3 rounded shadow bg-white cursor-pointer"
-              onClick={() => setSelectedOrder(order)}
-            >
-              <div className="font-semibold">Sipariş No: {order.number}</div>
-              <div>
-                {order.billingInfo?.firstName} {order.billingInfo?.lastName}
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
+function playSuccessSound() {
+  $w("#successSound").play();
+}
 
-      {selectedOrder && (
-        <div>
-          <button
-            className="mb-4 px-4 py-2 bg-gray-300 rounded"
-            onClick={() => setSelectedOrder(null)}
-          >
-            ← Geri Dön
-          </button>
-
-          <h2 className="text-lg font-bold mb-2">
-            Sipariş #{selectedOrder.number}
-          </h2>
-          <button
-            className="mb-4 px-4 py-2 bg-blue-500 text-white rounded"
-            onClick={startScanner}
-          >
-            Kamerayla Barkod Tara
-          </button>
-          <div
-            id="reader"
-            className="mb-4 border border-gray-400 rounded"
-            style={{ width: "100%", maxWidth: "400px", height: "350px", margin: "auto" }}
-          />
-
-          <ul className="space-y-2">
-            {selectedOrder.lineItems.map((item, index) => (
-              <li
-                key={index}
-                className={`p-3 rounded shadow ${
-                  isItemScanned(item.sku) ? "bg-green-100" : "bg-white"
-                }`}
-              >
-                <div className="font-semibold">{item.name}</div>
-                <div>Barkod (SKU): {item.sku}</div>
-                <div>Adet: {item.quantity}</div>
-                {packageMappings[item.sku] && (
-                  <ul className="mt-2 text-sm">
-                    {packageMappings[item.sku].map((barkod, i) => (
-                      <li
-                        key={i}
-                        className={
-                          scannedBarcodes.includes(barkod)
-                            ? "text-green-600"
-                            : "text-red-500 font-semibold"
-                        }
-                      >
-                        Paket Barkod: {barkod}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
+function playErrorSound() {
+  $w("#errorSound").play();
 }
