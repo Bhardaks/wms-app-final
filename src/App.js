@@ -4,13 +4,26 @@
 import React, { useEffect, useState } from "react";
 import { Html5QrcodeScanner } from "html5-qrcode";
 
+// ✅ Ürünlere ait alt barkod eşleştirme listesi burada tutulur
+const packageMappings = {
+  "BOH-YT-D-BE-01-B": [
+    "BOH010325253010",
+    "BOH010326253010",
+    "BOH010327253010",
+    "BOH010328253010",
+    "BOH010329253010",
+    "BOH010330253010",
+    "BOH010331253010",
+  ],
+  // Diğer ürünler buraya eklenebilir
+};
+
 export default function App() {
   const [orders, setOrders] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [scannedBarcodes, setScannedBarcodes] = useState([]);
   const [scanner, setScanner] = useState(null);
 
-  // ✅ DÜZELTİLDİ: Artık doğrudan Wix'e değil, kendi proxy endpoint'ine istek atılıyor
   useEffect(() => {
     fetch("/api/orders")
       .then((res) => res.json())
@@ -35,7 +48,11 @@ export default function App() {
 
   const onScanFailure = (error) => {};
 
-  const isItemScanned = (sku) => scannedBarcodes.includes(sku);
+  const isItemScanned = (sku) => {
+    const packages = packageMappings[sku];
+    if (!packages) return scannedBarcodes.includes(sku);
+    return packages.every((barkod) => scannedBarcodes.includes(barkod));
+  };
 
   return (
     <div className="p-4">
@@ -89,6 +106,22 @@ export default function App() {
                 <div className="font-semibold">{item.name}</div>
                 <div>Barkod (SKU): {item.sku}</div>
                 <div>Adet: {item.quantity}</div>
+                {packageMappings[item.sku] && (
+                  <ul className="mt-2 text-sm">
+                    {packageMappings[item.sku].map((barkod, i) => (
+                      <li
+                        key={i}
+                        className={
+                          scannedBarcodes.includes(barkod)
+                            ? "text-green-600"
+                            : "text-red-500 font-semibold"
+                        }
+                      >
+                        Paket Barkod: {barkod}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </li>
             ))}
           </ul>
