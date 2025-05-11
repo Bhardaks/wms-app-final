@@ -117,10 +117,17 @@ export default function App() {
             Kamerayla Barkod Tara
           </button>
           <div
-            id="reader"
-            className="mb-4 border border-gray-400 rounded"
-            style={{ width: "100%", maxWidth: "400px", height: "350px", margin: "auto" }}
-          />
+  id="reader"
+  className="mb-4 border border-gray-400 rounded"
+  style={{
+    width: "100%",
+    maxWidth: "300px",
+    height: "200px",
+    margin: "auto",
+    overflow: "hidden",
+  }}
+/>
+
 
           <ul className="space-y-2">
             {selectedOrder.lineItems.map((item, index) => (
